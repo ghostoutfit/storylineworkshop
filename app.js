@@ -188,19 +188,19 @@ function renderCards(resources) {
 
   container.innerHTML = resources.map(r => `
     <article class="card" data-id="${r.id}">
-      <div class="card-meta">${escapeHtml(cardLabel(r))}</div>
-      <p class="card-description">${escapeHtml(r.Description)}</p>
-      ${r.Coherence ? `
-        <div class="card-coherence">
-          <span class="coherence-label">Coherence note:</span> ${escapeHtml(r.Coherence)}
-        </div>` : ''}
-      <div class="card-footer">
-        <div class="card-footer-left">
-          ${r.Link ? `<a class="btn-resource" href="${escapeAttr(r.Link)}" target="_blank" rel="noopener">Open Resource →</a>` : ''}
-          ${r.Contributor ? `<span class="card-contributor">by <button class="link-btn contributor-filter" data-contributor="${escapeAttr(r.Contributor)}">${escapeHtml(r.Contributor)}</button></span>` : ''}
-          ${r.ProjectTag ? `<button class="tag tag-filter" data-tag="${escapeAttr(r.ProjectTag)}">${escapeHtml(r.ProjectTag)}</button>` : ''}
-        </div>
-        <div class="card-footer-right">
+      <div class="card-meta">
+        ${escapeHtml(cardLabel(r))}
+        ${r.Contributor ? ` · <button class="link-btn contributor-filter" data-contributor="${escapeAttr(r.Contributor)}">by ${escapeHtml(r.Contributor)}</button>` : ''}
+        ${r.ProjectTag ? `<button class="tag tag-filter" data-tag="${escapeAttr(r.ProjectTag)}">${escapeHtml(r.ProjectTag)}</button>` : ''}
+      </div>
+      <p class="card-description">
+        ${r.Link
+          ? `<a href="${escapeAttr(r.Link)}" target="_blank" rel="noopener">${escapeHtml(r.Description)}</a>`
+          : escapeHtml(r.Description)}
+      </p>
+      <div class="card-bottom">
+        ${r.Coherence ? `<div class="card-coherence"><span class="coherence-label">Coherence:</span> ${escapeHtml(r.Coherence)}</div>` : '<div></div>'}
+        <div class="card-actions">
           <button class="like-btn${likedResources.has(r.id) ? ' liked' : ''}" data-id="${r.id}" aria-label="Like this resource">
             <span class="like-icon">♡</span>
             <span class="like-count">…</span>

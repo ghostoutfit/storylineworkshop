@@ -47,7 +47,7 @@ body {
 }
 
 a {
-  color: var(--teal);
+  color: var(--accent);
   text-decoration: none;
 }
 
@@ -93,7 +93,7 @@ button {
 }
 
 .site-title span {
-  color: var(--teal);
+  color: var(--accent);
 }
 
 .site-tagline {
@@ -104,7 +104,7 @@ button {
 
 .header-submit {
   font-size: 0.875rem;
-  color: var(--teal);
+  color: var(--accent);
   white-space: nowrap;
 }
 
@@ -142,7 +142,7 @@ button {
 }
 
 .filter-row select:focus {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
 
@@ -179,7 +179,7 @@ button {
 }
 
 .refresh-btn:hover {
-  color: var(--teal);
+  color: var(--accent);
 }
 
 /* ─── Results Area ──────────────────────────────────────────────────────────── */
@@ -221,6 +221,10 @@ button {
   color: var(--text-muted);
   margin-bottom: 0.5rem;
   font-weight: 500;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
 }
 
 .card-description {
@@ -230,14 +234,32 @@ button {
   line-height: 1.6;
 }
 
+.card-description a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 2px;
+}
+
+.card-description a:hover {
+  text-decoration-color: var(--accent);
+}
+
+/* Bottom row: coherence note + action buttons side by side */
+.card-bottom {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
 .card-coherence {
-  background: var(--bg-subtle);
-  border-left: 3px solid var(--teal);
-  padding: 0.5rem 0.75rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
-  border-radius: 0 var(--radius) var(--radius) 0;
+  line-height: 1.5;
+  flex: 1;
 }
 
 .coherence-label {
@@ -245,52 +267,11 @@ button {
   color: var(--text);
 }
 
-.card-footer {
+.card-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border);
-}
-
-.card-footer-left {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.card-footer-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
   flex-shrink: 0;
-}
-
-.btn-resource {
-  display: inline-block;
-  font-size: 0.8125rem;
-  color: var(--teal-dark);
-  background: var(--teal-light);
-  border: 1px solid #b3d4d4;
-  border-radius: var(--radius);
-  padding: 0.25rem 0.6rem;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background 0.15s;
-}
-
-.btn-resource:hover {
-  background: #d0e9e9;
-  text-decoration: none;
-}
-
-.card-contributor {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
 }
 
 .contributor-filter {
@@ -299,14 +280,14 @@ button {
   padding: 0;
   font-family: inherit;
   font-size: 0.8125rem;
-  color: var(--teal);
+  color: var(--text-muted);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .contributor-filter:hover {
-  color: var(--teal-dark);
+  color: var(--text);
 }
 
 .tag {
@@ -317,7 +298,7 @@ button {
   border-radius: 20px;
   background: var(--tag-bg);
   color: var(--tag-text);
-  border: 1px solid #b3d4d4;
+  border: 1px solid #c5d4be;
   font-weight: 500;
   letter-spacing: 0.01em;
 }
@@ -328,7 +309,7 @@ button {
 }
 
 .tag-filter:hover {
-  background: #d0e9e9;
+  background: #dde7d8;
 }
 
 /* ─── Like Button ────────────────────────────────────────────────────────────── */
@@ -443,7 +424,7 @@ button {
 
 .comment-name:focus,
 .comment-text:focus {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
 
@@ -454,7 +435,7 @@ button {
 
 .comment-submit {
   align-self: flex-start;
-  background: var(--teal);
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius);
@@ -465,7 +446,7 @@ button {
 }
 
 .comment-submit:hover {
-  background: var(--teal-dark);
+  background: var(--accent-dark);
 }
 
 .comment-submit:disabled {
@@ -500,7 +481,7 @@ button {
 }
 
 .empty-state a {
-  color: var(--teal);
+  color: var(--accent);
 }
 
 .error-msg {
@@ -519,8 +500,8 @@ button {
 }
 
 .btn-retry:hover {
-  background: var(--teal-light);
-  border-color: var(--teal);
+  background: var(--accent-light);
+  border-color: var(--accent);
 }
 
 /* ─── Footer ─────────────────────────────────────────────────────────────────── */
@@ -545,7 +526,7 @@ button {
 }
 
 .footer-inner a:hover {
-  color: var(--teal);
+  color: var(--accent);
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */
