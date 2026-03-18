@@ -49,7 +49,7 @@ function partSortKey(part) {
 
 // ─── TSV Fetching & Parsing ───────────────────────────────────────────────────
 
-const HEADERS = ['Timestamp', 'Email', 'Program', 'Course', 'UnitName', 'Lesson', 'Part', 'Description', 'Coherence', 'Link', 'Contributor', 'ProjectTag'];
+const HEADERS = ['Timestamp', 'Email', 'Program', 'Course', 'UnitName', 'Lesson', 'Part', 'Description', 'Coherence', 'Link', 'Contributor', 'ProjectTag', 'Nickname'];
 
 async function fetchResources() {
   const res = await fetch(CONFIG.sheetUrl);
@@ -212,11 +212,12 @@ function renderCards(resources) {
         ${r.Contributor ? ` · <button class="link-btn contributor-filter" data-contributor="${escapeAttr(r.Contributor)}">by ${escapeHtml(r.Contributor)}</button>` : ''}
         ${r._projectTags.map(tag => `<button class="tag tag-filter" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>`).join('')}
       </div>
-      <p class="card-description">
+      ${r.Nickname ? `<p class="card-nickname">
         ${r.Link
-          ? `<a href="${escapeAttr(r.Link)}" target="_blank" rel="noopener">${escapeHtml(r.Description)}</a>`
-          : escapeHtml(r.Description)}
-      </p>
+          ? `<a href="${escapeAttr(r.Link)}" target="_blank" rel="noopener">${escapeHtml(r.Nickname)}</a>`
+          : escapeHtml(r.Nickname)}
+      </p>` : ''}
+      <p class="card-description">${escapeHtml(r.Description)}</p>
       <div class="card-bottom">
         ${r.Coherence ? `<div class="card-coherence"><span class="coherence-label">Coherence:</span> ${escapeHtml(r.Coherence)}</div>` : '<div></div>'}
         <div class="card-actions">
