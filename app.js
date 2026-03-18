@@ -30,6 +30,11 @@ function formatTimestamp(date) {
   return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function splitValues(str) {
+  if (!str) return [];
+  return str.split(',').map(v => v.trim()).filter(Boolean);
+}
+
 function lessonSortKey(lesson) {
   const num = parseFloat(lesson);
   return isNaN(num) ? 9999 : num;
@@ -44,7 +49,7 @@ function partSortKey(part) {
 
 // ─── TSV Fetching & Parsing ───────────────────────────────────────────────────
 
-const HEADERS = ['Timestamp', 'Email', 'Program', 'Course', 'UnitName', 'Lesson', 'Part', 'Description', 'Coherence', 'Link', 'Contributor', 'ProjectTag'];
+const HEADERS = ['Timestamp', 'Email', 'Program', 'Course', 'UnitName', 'Lesson', 'Part', 'Nickname', 'Description', 'Coherence', 'Link', 'Contributor', 'ProjectTag'];
 
 async function fetchResources() {
   const res = await fetch(CONFIG.sheetUrl);
@@ -63,6 +68,10 @@ async function fetchResources() {
       row.id = simpleHash(row.Timestamp + row.Email);
       // Strip email from display — never expose it
       delete row.Email;
+      // Parse comma-separated multi-value fields into arrays
+      row._lessons = splitValues(row.Lesson);
+      row._parts = splitValues(row.Part);
+      row._projectTags = splitValues(row.ProjectTag);
       return row;
     });
 }
@@ -74,29 +83,39 @@ function getFilteredResources() {
     if (filters.program && r.Program !== filters.program) return false;
     if (filters.course && r.Course !== filters.course) return false;
     if (filters.unitName && r.UnitName !== filters.unitName) return false;
-    if (filters.lesson && r.Lesson !== filters.lesson) return false;
-    if (filters.part && r.Part !== filters.part) return false;
+    if (filters.lesson && !r._lessons.includes(filters.lesson)) return false;
+    if (filters.part && !r._parts.includes(filters.part)) return false;
     if (filters.contributor && r.Contributor !== filters.contributor) return false;
-    if (filters.projectTag && r.ProjectTag !== filters.projectTag) return false;
+    if (filters.projectTag && !r._projectTags.includes(filters.projectTag)) return false;
     return true;
   });
 }
 
 function getSortedResources(resources) {
   return [...resources].sort((a, b) => {
-    const aPartKey = partSortKey(a.Part);
-    const bPartKey = partSortKey(b.Part);
+    const aPartKey = a._parts.length ? Math.min(...a._parts.map(partSortKey)) : 9999;
+    const bPartKey = b._parts.length ? Math.min(...b._parts.map(partSortKey)) : 9999;
     if (aPartKey !== bPartKey) return aPartKey - bPartKey;
-    const aLesson = lessonSortKey(a.Lesson);
-    const bLesson = lessonSortKey(b.Lesson);
+    const aLesson = a._lessons.length ? Math.min(...a._lessons.map(lessonSortKey)) : 9999;
+    const bLesson = b._lessons.length ? Math.min(...b._lessons.map(lessonSortKey)) : 9999;
     if (aLesson !== bLesson) return aLesson - bLesson;
     return aPartKey - bPartKey;
   });
 }
 
-// Returns unique sorted values from a field, optionally limited to a subset
+// Returns unique sorted values from a plain field
 function uniqueValues(resources, field) {
   const vals = [...new Set(resources.map(r => r[field]).filter(Boolean))];
+  return sortMixed(vals);
+}
+
+// Returns unique sorted values from a pre-parsed array field (multi-value)
+function uniqueMultiValues(resources, arrayField) {
+  const vals = [...new Set(resources.flatMap(r => r[arrayField]))];
+  return sortMixed(vals);
+}
+
+function sortMixed(vals) {
   return vals.sort((a, b) => {
     const na = parseFloat(a), nb = parseFloat(b);
     if (!isNaN(na) && !isNaN(nb)) return na - nb;
@@ -120,10 +139,10 @@ function buildDropdowns() {
     !filters.unitName || r.UnitName === filters.unitName
   );
   const byLesson = byUnit.filter(r =>
-    !filters.lesson || r.Lesson === filters.lesson
+    !filters.lesson || r._lessons.includes(filters.lesson)
   );
   const byPart = byLesson.filter(r =>
-    !filters.part || r.Part === filters.part
+    !filters.part || r._parts.includes(filters.part)
   );
 
   // Contributor and ProjectTag filter from fully-filtered set (not cascading positionally)
@@ -132,10 +151,10 @@ function buildDropdowns() {
   setDropdown('filter-program', uniqueValues(allResources, 'Program'), filters.program, 'All Programs');
   setDropdown('filter-course', uniqueValues(byProgram, 'Course'), filters.course, 'All Courses');
   setDropdown('filter-unit', uniqueValues(byCourse, 'UnitName'), filters.unitName, 'All Units');
-  setDropdown('filter-lesson', uniqueValues(byUnit, 'Lesson'), filters.lesson, 'All Lessons');
-  setDropdown('filter-part', uniqueValues(byLesson, 'Part'), filters.part, 'All Parts');
+  setDropdown('filter-lesson', uniqueMultiValues(byUnit, '_lessons'), filters.lesson, 'All Lessons');
+  setDropdown('filter-part', uniqueMultiValues(byLesson, '_parts'), filters.part, 'All Parts');
   setDropdown('filter-contributor', uniqueValues(fullyFiltered, 'Contributor'), filters.contributor, 'All Contributors');
-  setDropdown('filter-tag', uniqueValues(fullyFiltered, 'ProjectTag'), filters.projectTag, 'All Tags');
+  setDropdown('filter-tag', uniqueMultiValues(fullyFiltered, '_projectTags'), filters.projectTag, 'All Tags');
 }
 
 function setDropdown(id, options, selected, placeholder) {
@@ -191,13 +210,14 @@ function renderCards(resources) {
       <div class="card-meta">
         ${escapeHtml(cardLabel(r))}
         ${r.Contributor ? ` · <button class="link-btn contributor-filter" data-contributor="${escapeAttr(r.Contributor)}">by ${escapeHtml(r.Contributor)}</button>` : ''}
-        ${r.ProjectTag ? `<button class="tag tag-filter" data-tag="${escapeAttr(r.ProjectTag)}">${escapeHtml(r.ProjectTag)}</button>` : ''}
+        ${r._projectTags.map(tag => `<button class="tag tag-filter" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>`).join('')}
       </div>
-      <p class="card-description">
+      ${r.Nickname ? `<p class="card-nickname">
         ${r.Link
-          ? `<a href="${escapeAttr(r.Link)}" target="_blank" rel="noopener">${escapeHtml(r.Description)}</a>`
-          : escapeHtml(r.Description)}
-      </p>
+          ? `<a href="${escapeAttr(r.Link)}" target="_blank" rel="noopener">${escapeHtml(r.Nickname)}</a>`
+          : escapeHtml(r.Nickname)}
+      </p>` : ''}
+      <p class="card-description">${escapeHtml(r.Description)}</p>
       <div class="card-bottom">
         ${r.Coherence ? `<div class="card-coherence"><span class="coherence-label">Coherence:</span> ${escapeHtml(r.Coherence)}</div>` : '<div></div>'}
         <div class="card-actions">

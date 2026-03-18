@@ -7,7 +7,7 @@ const CONFIG = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSTeFqJdiBjYIiYLba9ldh_b_kQZWAc0EoHOTdm4xDl8jI80y22a9mc5Izfavdy-6WzTz9olmazwWue/pub?output=tsv',
 
   // Google Form URL for submitting new resources
-  formUrl: 'https://docs.google.com/forms/d/FORM_ID/viewform',
+  formUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSc3YzMIhyPxmTG2TT48nRT2kHIUFt7koq4SnyplwMZF5KJB7w/viewform',
 
   // Contact email shown in footer
   contactEmail: 'email@example.com',
