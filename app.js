@@ -49,7 +49,7 @@ function partSortKey(part) {
 
 // ─── TSV Fetching & Parsing ───────────────────────────────────────────────────
 
-const HEADERS = ['Timestamp', 'Email', 'Program', 'Course', 'UnitName', 'Lesson', 'Part', 'Description', 'Coherence', 'Link', 'Contributor', 'ProjectTag', 'Nickname'];
+const HEADERS = ['Timestamp', 'Email', 'Program', 'Course', 'UnitName', 'Lesson', 'Part', 'Nickname', 'Description', 'Coherence', 'Link', 'Contributor', 'ProjectTag'];
 
 async function fetchResources() {
   const res = await fetch(CONFIG.sheetUrl);
