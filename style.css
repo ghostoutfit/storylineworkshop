@@ -371,6 +371,84 @@ button {
   color: var(--text);
 }
 
+/* ─── Permalink Button ───────────────────────────────────────────────────────── */
+
+.permalink-btn {
+  background: none;
+  border: none;
+  font-family: var(--font);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 0.1rem;
+  opacity: 0.35;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.permalink-btn:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.card:hover .permalink-btn {
+  opacity: 0.6;
+}
+
+/* ─── Single Resource View ───────────────────────────────────────────────────── */
+
+.single-resource-header {
+  margin-bottom: 1rem;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  font-family: var(--font);
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.back-btn:hover {
+  color: var(--accent);
+}
+
+.single-resource-more {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.see-more-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 1rem;
+  font-family: var(--font);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.see-more-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+  background: var(--accent-light);
+}
+
+.see-more-btn strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* ─── Comments Section ───────────────────────────────────────────────────────── */
 
 .comments-section {

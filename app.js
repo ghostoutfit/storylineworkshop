@@ -7,6 +7,7 @@ import { initFirebase, getLikes, incrementLike, getComments, addComment, isFireb
 
 let allResources = [];   // full parsed dataset, never mutated
 let filters = {};        // current filter state
+let singleResourceId = null; // set when viewing a ?r= permalink
 const likedResources = new Set(JSON.parse(localStorage.getItem('sw_liked') || '[]'));
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -74,6 +75,42 @@ async function fetchResources() {
       row._projectTags = splitValues(row.ProjectTag);
       return row;
     });
+}
+
+// ─── URL State (Permalinks) ───────────────────────────────────────────────────
+
+const FILTER_URL_KEYS = ['program', 'course', 'unitName', 'lesson', 'part', 'contributor', 'projectTag'];
+
+function readUrlHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return {};
+  const params = {};
+  hash.split('&').forEach(part => {
+    const eqIdx = part.indexOf('=');
+    if (eqIdx < 0) return;
+    const k = decodeURIComponent(part.slice(0, eqIdx));
+    const v = decodeURIComponent(part.slice(eqIdx + 1));
+    if (k) params[k] = v;
+  });
+  return params;
+}
+
+function writeUrlHash(extra = {}) {
+  const params = {};
+  FILTER_URL_KEYS.forEach(k => {
+    if (filters[k]) params[k] = filters[k];
+  });
+  Object.assign(params, extra);
+  const str = Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+  history.replaceState(null, '', str ? `#${str}` : location.pathname + location.search);
+}
+
+function applyUrlHash(params) {
+  FILTER_URL_KEYS.forEach(k => {
+    if (params[k]) filters[k] = params[k];
+  });
 }
 
 // ─── Filter Logic ─────────────────────────────────────────────────────────────
@@ -187,25 +224,8 @@ function cardLabel(resource) {
   return parts.join(' → ');
 }
 
-function renderCards(resources) {
-  const container = document.getElementById('results');
-  const countEl = document.getElementById('result-count');
-
-  if (resources.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <p>No resources match these filters yet. Know something that belongs here?</p>
-        <a href="${CONFIG.formUrl}" target="_blank" rel="noopener">Submit a resource →</a>
-      </div>`;
-    if (countEl) countEl.textContent = '';
-    return;
-  }
-
-  if (countEl) {
-    countEl.textContent = `${resources.length} resource${resources.length === 1 ? '' : 's'}`;
-  }
-
-  container.innerHTML = resources.map(r => `
+function renderCardHtml(r) {
+  return `
     <article class="card" data-id="${r.id}">
       <div class="card-meta">
         ${escapeHtml(cardLabel(r))}
@@ -228,6 +248,7 @@ function renderCards(resources) {
           <button class="comments-toggle" data-id="${r.id}">
             Comments (<span class="comment-count-${r.id}">…</span>)
           </button>
+          <button class="permalink-btn" data-id="${r.id}" aria-label="Copy link to this resource" title="Copy link">#</button>
         </div>
       </div>
       <div class="comments-section" id="comments-${r.id}" hidden>
@@ -240,11 +261,78 @@ function renderCards(resources) {
           <button class="comment-submit" data-id="${r.id}">Post</button>
         </div>
       </div>
-    </article>
-  `).join('');
+    </article>`;
+}
+
+function renderCards(resources) {
+  const container = document.getElementById('results');
+  const countEl = document.getElementById('result-count');
+
+  if (resources.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <p>No resources match these filters yet. Know something that belongs here?</p>
+        <a href="${CONFIG.formUrl}" target="_blank" rel="noopener">Submit a resource →</a>
+      </div>`;
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+
+  if (countEl) {
+    countEl.textContent = `${resources.length} resource${resources.length === 1 ? '' : 's'}`;
+  }
+
+  container.innerHTML = resources.map(r => renderCardHtml(r)).join('');
 
   // Load likes asynchronously
   resources.forEach(r => loadLikes(r.id));
+}
+
+function renderSingleResource(resource) {
+  document.querySelector('.filter-bar').hidden = true;
+  const container = document.getElementById('results');
+  const countEl = document.getElementById('result-count');
+  if (countEl) countEl.textContent = '';
+
+  const moreButtons = [];
+  if (resource.UnitName) {
+    moreButtons.push(`
+      <button class="see-more-btn"
+        data-program="${escapeAttr(resource.Program)}"
+        data-course="${escapeAttr(resource.Course)}"
+        data-unitname="${escapeAttr(resource.UnitName)}">
+        See more from this unit: <strong>${escapeHtml(resource.UnitName)}</strong>
+      </button>`);
+  }
+  resource._lessons.forEach(lesson => {
+    moreButtons.push(`
+      <button class="see-more-btn"
+        data-program="${escapeAttr(resource.Program)}"
+        data-course="${escapeAttr(resource.Course)}"
+        data-unitname="${escapeAttr(resource.UnitName)}"
+        data-lesson="${escapeAttr(lesson)}">
+        See more from Lesson <strong>${escapeHtml(lesson)}</strong>
+      </button>`);
+  });
+
+  container.innerHTML = `
+    <div class="single-resource-header">
+      <button class="back-btn" id="back-to-list">← All resources</button>
+    </div>
+    ${renderCardHtml(resource)}
+    ${moreButtons.length ? `<div class="single-resource-more">${moreButtons.join('')}</div>` : ''}
+  `;
+
+  loadLikes(resource.id);
+}
+
+function exitSingleResource(newFilters) {
+  singleResourceId = null;
+  document.querySelector('.filter-bar').hidden = false;
+  history.pushState(null, '', location.pathname);
+  resetFilters();
+  if (newFilters) Object.assign(filters, newFilters);
+  update();
 }
 
 function escapeHtml(str) {
@@ -436,6 +524,34 @@ function attachEventListeners() {
     const commentSubmit = e.target.closest('.comment-submit');
     if (commentSubmit) {
       await handlePostComment(commentSubmit.dataset.id);
+      return;
+    }
+
+    const permalinkBtn = e.target.closest('.permalink-btn');
+    if (permalinkBtn) {
+      const id = permalinkBtn.dataset.id;
+      const url = `${location.origin}${location.pathname}?r=${id}`;
+      navigator.clipboard?.writeText(url).catch(() => {});
+      permalinkBtn.textContent = '✓';
+      setTimeout(() => { permalinkBtn.textContent = '#'; }, 1500);
+      return;
+    }
+
+    const backBtn = e.target.closest('#back-to-list');
+    if (backBtn) {
+      exitSingleResource({});
+      return;
+    }
+
+    const seeMoreBtn = e.target.closest('.see-more-btn');
+    if (seeMoreBtn) {
+      const d = seeMoreBtn.dataset;
+      const newFilters = {};
+      if (d.program) newFilters.program = d.program;
+      if (d.course) newFilters.course = d.course;
+      if (d.unitname) newFilters.unitName = d.unitname;
+      if (d.lesson) newFilters.lesson = d.lesson;
+      exitSingleResource(newFilters);
     }
   });
 }
@@ -465,9 +581,19 @@ function resetFilters() {
 // ─── Update (re-render) ───────────────────────────────────────────────────────
 
 function update() {
+  if (singleResourceId) {
+    const resource = allResources.find(r => r.id === singleResourceId);
+    if (resource) {
+      renderSingleResource(resource);
+      return;
+    }
+    singleResourceId = null; // not found, fall through to list
+  }
+  document.querySelector('.filter-bar').hidden = false;
   const filtered = getSortedResources(getFilteredResources());
   buildDropdowns();
   renderCards(filtered);
+  writeUrlHash();
 }
 
 // ─── Data Loading ─────────────────────────────────────────────────────────────
@@ -497,7 +623,12 @@ async function loadData() {
 
 async function init() {
   initFirebase(CONFIG.firebase);
+  singleResourceId = new URLSearchParams(location.search).get('r') || null;
   resetFilters();
+  if (!singleResourceId) {
+    const urlParams = readUrlHash();
+    applyUrlHash(urlParams);
+  }
   attachEventListeners();
   await loadData();
 }
