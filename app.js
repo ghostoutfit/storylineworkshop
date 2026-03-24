@@ -248,7 +248,7 @@ function renderCardHtml(r) {
           <button class="comments-toggle" data-id="${r.id}">
             Comments (<span class="comment-count-${r.id}">…</span>)
           </button>
-          <button class="permalink-btn" data-id="${r.id}" aria-label="Copy link to this resource" title="Copy link">#</button>
+          <a class="permalink-btn" href="?r=${r.id}" data-id="${r.id}" aria-label="Copy link to this resource" title="Copy link">#</a>
         </div>
       </div>
       <div class="comments-section" id="comments-${r.id}" hidden>
@@ -529,6 +529,7 @@ function attachEventListeners() {
 
     const permalinkBtn = e.target.closest('.permalink-btn');
     if (permalinkBtn) {
+      e.preventDefault();
       const id = permalinkBtn.dataset.id;
       const url = `${location.origin}${location.pathname}?r=${id}`;
       navigator.clipboard?.writeText(url).catch(() => {});
