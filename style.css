@@ -383,6 +383,7 @@ button {
   padding: 0 0.1rem;
   opacity: 0.35;
   transition: opacity 0.15s, color 0.15s;
+  text-decoration: none;
 }
 
 .permalink-btn:hover {
