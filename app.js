@@ -76,6 +76,50 @@ async function fetchResources() {
     });
 }
 
+// ─── URL State (Permalinks) ───────────────────────────────────────────────────
+
+const FILTER_URL_KEYS = ['program', 'course', 'unitName', 'lesson', 'part', 'contributor', 'projectTag'];
+
+function readUrlHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return {};
+  const params = {};
+  hash.split('&').forEach(part => {
+    const eqIdx = part.indexOf('=');
+    if (eqIdx < 0) return;
+    const k = decodeURIComponent(part.slice(0, eqIdx));
+    const v = decodeURIComponent(part.slice(eqIdx + 1));
+    if (k) params[k] = v;
+  });
+  return params;
+}
+
+function writeUrlHash(extra = {}) {
+  const params = {};
+  FILTER_URL_KEYS.forEach(k => {
+    if (filters[k]) params[k] = filters[k];
+  });
+  Object.assign(params, extra);
+  const str = Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+  history.replaceState(null, '', str ? `#${str}` : location.pathname + location.search);
+}
+
+function applyUrlHash(params) {
+  FILTER_URL_KEYS.forEach(k => {
+    if (params[k]) filters[k] = params[k];
+  });
+}
+
+function scrollToResource(resourceId) {
+  const card = document.querySelector(`.card[data-id="${resourceId}"]`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.classList.add('permalink-highlight');
+  setTimeout(() => card.classList.remove('permalink-highlight'), 2000);
+}
+
 // ─── Filter Logic ─────────────────────────────────────────────────────────────
 
 function getFilteredResources() {
@@ -228,6 +272,7 @@ function renderCards(resources) {
           <button class="comments-toggle" data-id="${r.id}">
             Comments (<span class="comment-count-${r.id}">…</span>)
           </button>
+          <button class="permalink-btn" data-id="${r.id}" aria-label="Copy link to this resource" title="Copy link">#</button>
         </div>
       </div>
       <div class="comments-section" id="comments-${r.id}" hidden>
@@ -436,6 +481,17 @@ function attachEventListeners() {
     const commentSubmit = e.target.closest('.comment-submit');
     if (commentSubmit) {
       await handlePostComment(commentSubmit.dataset.id);
+      return;
+    }
+
+    const permalinkBtn = e.target.closest('.permalink-btn');
+    if (permalinkBtn) {
+      const id = permalinkBtn.dataset.id;
+      writeUrlHash({ resource: id });
+      const url = location.href;
+      navigator.clipboard?.writeText(url).catch(() => {});
+      permalinkBtn.textContent = '✓';
+      setTimeout(() => { permalinkBtn.textContent = '#'; }, 1500);
     }
   });
 }
@@ -468,6 +524,7 @@ function update() {
   const filtered = getSortedResources(getFilteredResources());
   buildDropdowns();
   renderCards(filtered);
+  writeUrlHash();
 }
 
 // ─── Data Loading ─────────────────────────────────────────────────────────────
@@ -498,8 +555,13 @@ async function loadData() {
 async function init() {
   initFirebase(CONFIG.firebase);
   resetFilters();
+  const urlParams = readUrlHash();
+  applyUrlHash(urlParams);
   attachEventListeners();
   await loadData();
+  if (urlParams.resource) {
+    scrollToResource(urlParams.resource);
+  }
 }
 
 init();
