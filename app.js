@@ -529,12 +529,6 @@ function attachEventListeners() {
 
     const permalinkBtn = e.target.closest('.permalink-btn');
     if (permalinkBtn) {
-      e.preventDefault();
-      const id = permalinkBtn.dataset.id;
-      const url = `${location.origin}${location.pathname}?r=${id}`;
-      navigator.clipboard?.writeText(url).catch(() => {});
-      permalinkBtn.textContent = '✓';
-      setTimeout(() => { permalinkBtn.textContent = '#'; }, 1500);
       return;
     }
 
