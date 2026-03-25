@@ -16,12 +16,12 @@ const CONFIG = {
   // Create a project at https://console.firebase.google.com/
   // Then: Project Settings → Your apps → Web app → firebaseConfig
   firebase: {
-    apiKey: 'YOUR_API_KEY',
-    authDomain: 'YOUR_PROJECT.firebaseapp.com',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT.appspot.com',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    appId: 'YOUR_APP_ID'
+    apiKey: 'AIzaSyCSKvO6ICHR3tMQLPL-dBKQD7OiUDdFD8E',
+    authDomain: 'storyline-workshop.firebaseapp.com',
+    projectId: 'storyline-workshop',
+    storageBucket: 'storyline-workshop.firebasestorage.app',
+    messagingSenderId: '763019722507',
+    appId: '1:763019722507:web:0a054cacc4e4fd5a7e6c0e'
   },
 
   // Default filter values on page load

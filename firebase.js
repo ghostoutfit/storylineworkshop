@@ -38,7 +38,8 @@ export async function getLikes(resourceId) {
   if (!firebaseAvailable) return 0;
   try {
     const ref = doc(db, 'resources', resourceId);
-    const snap = await getDoc(ref);
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000));
+    const snap = await Promise.race([getDoc(ref), timeout]);
     if (snap.exists()) {
       return snap.data().likes ?? 0;
     }
