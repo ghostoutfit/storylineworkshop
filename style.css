@@ -201,6 +201,22 @@ button {
   color: var(--text-muted);
 }
 
+#sort-order {
+  font-family: var(--font);
+  font-size: 0.8125rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+#sort-order:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 /* ─── Cards ─────────────────────────────────────────────────────────────────── */
 
 #results {
@@ -273,6 +289,35 @@ button {
 .coherence-label {
   font-weight: 600;
   color: var(--text);
+}
+
+.coherence-collapsible .coherence-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.coherence-collapsible.expanded .coherence-body {
+  display: inline;
+  overflow: visible;
+}
+
+.coherence-expand {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.coherence-expand:hover {
+  color: var(--accent-dark);
 }
 
 .card-actions {
@@ -634,5 +679,31 @@ button {
   .header-inner {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  /* Unit breadcrumb truncates with ellipsis; tags stay on same line */
+  .card-meta {
+    flex-wrap: nowrap;
+    overflow: hidden;
+    align-items: center;
+  }
+
+  .card-label {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-meta .tag {
+    flex-shrink: 0;
+  }
+
+  /* Likes above comments */
+  .card-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
   }
 }

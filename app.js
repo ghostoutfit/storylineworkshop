@@ -7,8 +7,11 @@ import { initFirebase, getLikes, incrementLike, getComments, addComment, isFireb
 
 let allResources = [];   // full parsed dataset, never mutated
 let filters = {};        // current filter state
-let singleResourceId = null; // set when viewing a ?r= permalink
+let sortOrder = 'default';
+let singleResourceId = null;
 const likedResources = new Set(JSON.parse(localStorage.getItem('sw_liked') || '[]'));
+const likeCounts = {};   // resourceId → count, populated as likes load
+let currentBatchId = 0;  // incremented each render to discard stale like loads
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -129,6 +132,12 @@ function getFilteredResources() {
 }
 
 function getSortedResources(resources) {
+  if (sortOrder === 'newest') {
+    return [...resources].sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+  }
+  if (sortOrder === 'most-liked') {
+    return [...resources].sort((a, b) => (likeCounts[b.id] || 0) - (likeCounts[a.id] || 0));
+  }
   return [...resources].sort((a, b) => {
     const aPartKey = a._parts.length ? Math.min(...a._parts.map(partSortKey)) : 9999;
     const bPartKey = b._parts.length ? Math.min(...b._parts.map(partSortKey)) : 9999;
@@ -214,6 +223,13 @@ function setDropdown(id, options, selected, placeholder) {
 
 // ─── Card Rendering ───────────────────────────────────────────────────────────
 
+const COHERENCE_THRESHOLD = 160;
+
+function renderCoherence(text) {
+  const isLong = text.length > COHERENCE_THRESHOLD;
+  return `<div class="card-coherence${isLong ? ' coherence-collapsible' : ''}"><span class="coherence-label">Coherence:</span> <span class="coherence-body">${escapeHtml(text)}</span>${isLong ? ' <button class="coherence-expand" type="button">Show more</button>' : ''}</div>`;
+}
+
 function cardLabel(resource) {
   const parts = [];
   if (resource.UnitName) parts.push(resource.UnitName);
@@ -228,8 +244,7 @@ function renderCardHtml(r) {
   return `
     <article class="card" data-id="${r.id}">
       <div class="card-meta">
-        ${escapeHtml(cardLabel(r))}
-        ${r.Contributor ? ` · <button class="link-btn contributor-filter" data-contributor="${escapeAttr(r.Contributor)}">by ${escapeHtml(r.Contributor)}</button>` : ''}
+        <span class="card-label">${escapeHtml(cardLabel(r))}${r.Contributor ? ` · <button class="link-btn contributor-filter" data-contributor="${escapeAttr(r.Contributor)}">by ${escapeHtml(r.Contributor)}</button>` : ''}</span>
         ${r._projectTags.map(tag => `<button class="tag tag-filter" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>`).join('')}
       </div>
       ${r.Nickname ? `<p class="card-nickname">
@@ -239,7 +254,7 @@ function renderCardHtml(r) {
       </p>` : ''}
       <p class="card-description">${escapeHtml(r.Description)}</p>
       <div class="card-bottom">
-        ${r.Coherence ? `<div class="card-coherence"><span class="coherence-label">Coherence:</span> ${escapeHtml(r.Coherence)}</div>` : '<div></div>'}
+        ${r.Coherence ? renderCoherence(r.Coherence) : '<div></div>'}
         <div class="card-actions">
           <button class="like-btn${likedResources.has(r.id) ? ' liked' : ''}" data-id="${r.id}" aria-label="Like this resource">
             <span class="like-icon">♡</span>
@@ -282,10 +297,11 @@ function renderCards(resources) {
     countEl.textContent = `${resources.length} resource${resources.length === 1 ? '' : 's'}`;
   }
 
+  const batchId = ++currentBatchId;
   container.innerHTML = resources.map(r => renderCardHtml(r)).join('');
 
   // Load likes asynchronously
-  resources.forEach(r => loadLikes(r.id));
+  resources.forEach(r => loadLikes(r.id, batchId));
 }
 
 function renderSingleResource(resource) {
@@ -323,7 +339,8 @@ function renderSingleResource(resource) {
     ${moreButtons.length ? `<div class="single-resource-more">${moreButtons.join('')}</div>` : ''}
   `;
 
-  loadLikes(resource.id);
+  const batchId = ++currentBatchId;
+  loadLikes(resource.id, batchId);
 }
 
 function exitSingleResource(newFilters) {
@@ -347,8 +364,10 @@ function escapeAttr(str) {
 
 // ─── Likes ────────────────────────────────────────────────────────────────────
 
-async function loadLikes(resourceId) {
+async function loadLikes(resourceId, batchId) {
   const count = await getLikes(resourceId);
+  if (batchId !== undefined && batchId !== currentBatchId) return;
+  likeCounts[resourceId] = count;
   updateLikeUI(resourceId, count);
 }
 
@@ -466,6 +485,12 @@ function attachEventListeners() {
     });
   });
 
+  // Sort order
+  document.getElementById('sort-order')?.addEventListener('change', e => {
+    sortOrder = e.target.value;
+    update();
+  });
+
   // Clear filters
   document.getElementById('clear-filters')?.addEventListener('click', e => {
     e.preventDefault();
@@ -524,6 +549,16 @@ function attachEventListeners() {
     const commentSubmit = e.target.closest('.comment-submit');
     if (commentSubmit) {
       await handlePostComment(commentSubmit.dataset.id);
+      return;
+    }
+
+    const coherenceExpandBtn = e.target.closest('.coherence-expand');
+    if (coherenceExpandBtn) {
+      const coherenceEl = coherenceExpandBtn.closest('.card-coherence');
+      if (coherenceEl) {
+        const expanded = coherenceEl.classList.toggle('expanded');
+        coherenceExpandBtn.textContent = expanded ? 'Show less' : 'Show more';
+      }
       return;
     }
 
