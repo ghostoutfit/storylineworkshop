@@ -61,7 +61,7 @@ function partSortKey(part) {
 const HEADERS = ['Timestamp', 'Email', 'Program', 'Course', 'UnitName', 'Lesson', 'Part', 'Nickname', 'Description', 'Coherence', 'Link', 'Contributor', 'ProjectTag'];
 
 async function fetchResources() {
-  const res = await fetch(CONFIG.sheetUrl);
+  const res = await fetch(CONFIG.sheetUrl, { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const text = await res.text();
   const lines = text.trim().split('\n');
@@ -84,7 +84,6 @@ async function fetchResources() {
       row._contributors = splitValues(row.Contributor);
       row._programs = splitValues(row.Program);
       row._courses = splitValues(row.Course);
-      row._unitNames = splitValues(row.UnitName);
       return row;
     });
 }
@@ -131,7 +130,7 @@ function getFilteredResources() {
   return allResources.filter(r => {
     if (filters.program && !r._programs.includes(filters.program)) return false;
     if (filters.course && !r._courses.includes(filters.course)) return false;
-    if (filters.unitName && !r._unitNames.includes(filters.unitName)) return false;
+    if (filters.unitName && r.UnitName !== filters.unitName) return false;
     if (filters.lesson && !r._lessons.includes(filters.lesson)) return false;
     if (filters.part && !r._parts.includes(filters.part)) return false;
     if (filters.contributor && !r._contributors.includes(filters.contributor)) return false;
@@ -191,7 +190,7 @@ function buildDropdowns() {
     !filters.course || r._courses.includes(filters.course)
   );
   const byUnit = byCourse.filter(r =>
-    !filters.unitName || r._unitNames.includes(filters.unitName)
+    !filters.unitName || r.UnitName === filters.unitName
   );
   const byLesson = byUnit.filter(r =>
     !filters.lesson || r._lessons.includes(filters.lesson)
@@ -205,7 +204,7 @@ function buildDropdowns() {
 
   setDropdown('filter-program', uniqueMultiValues(allResources, '_programs'), filters.program, 'All Programs');
   setDropdown('filter-course', uniqueMultiValues(byProgram, '_courses'), filters.course, 'All Courses');
-  setDropdown('filter-unit', uniqueMultiValues(byCourse, '_unitNames'), filters.unitName, 'All Units');
+  setDropdown('filter-unit', uniqueValues(byCourse, 'UnitName'), filters.unitName, 'All Units');
   setDropdown('filter-lesson', uniqueMultiValues(byUnit, '_lessons'), filters.lesson, 'All Lessons');
   setDropdown('filter-part', uniqueMultiValues(byLesson, '_parts'), filters.part, 'All Parts');
   setDropdown('filter-contributor', uniqueMultiValues(fullyFiltered, '_contributors'), filters.contributor, 'All Contributors');
