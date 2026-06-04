@@ -1,7 +1,7 @@
 // Storyline Workshop — Main application logic
 // Data fetching, parsing, filtering, and rendering.
 
-import { initFirebase, getLikes, incrementLike, decrementLike, getComments, addComment, isFirebaseAvailable } from './firebase.js';
+import { initFirebase, getLikes, incrementLike, decrementLike, getComments, addComment, deleteComment, isFirebaseAvailable } from './firebase.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -12,7 +12,7 @@ let singleResourceId = null;
 const likedResources = new Set(JSON.parse(localStorage.getItem('sw_liked') || '[]'));
 const likeCounts = {};   // resourceId → count, populated as likes load
 let currentBatchId = 0;  // incremented each render to discard stale like loads
-const pendingLikes = new Map(); // resourceId → timer — liked but not yet written to Firestore
+const myCommentIds = new Set(JSON.parse(localStorage.getItem('sw_my_comments') || '[]'));
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -28,6 +28,10 @@ function simpleHash(str) {
 
 function saveLiked() {
   localStorage.setItem('sw_liked', JSON.stringify([...likedResources]));
+}
+
+function saveMyComments() {
+  localStorage.setItem('sw_my_comments', JSON.stringify([...myCommentIds]));
 }
 
 function formatTimestamp(date) {
@@ -262,11 +266,10 @@ function renderCardHtml(r) {
             <span class="like-icon">${likedResources.has(r.id) ? '♥' : '♡'}</span>
             <span class="like-count">…</span>
           </button>
-          <button class="undo-like-btn" data-id="${r.id}"${pendingLikes.has(r.id) ? '' : ' hidden'}>undo</button>
           <button class="comments-toggle" data-id="${r.id}">
             Comments (<span class="comment-count-${r.id}">…</span>)
           </button>
-          <a class="permalink-btn" href="?r=${r.id}" data-id="${r.id}" aria-label="Copy link to this resource" title="Copy link">#</a>
+          <a class="permalink-btn" href="?r=${r.id}" data-id="${r.id}" aria-label="Permalink to this resource" title="Permalink">permalink</a>
         </div>
       </div>
       <div class="comments-section" id="comments-${r.id}" hidden>
@@ -382,58 +385,29 @@ function updateLikeUI(resourceId, count) {
   if (countEl) countEl.textContent = count;
   if (iconEl) iconEl.textContent = likedResources.has(resourceId) ? '♥' : '♡';
   btn.classList.toggle('liked', likedResources.has(resourceId));
-  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
-  if (undoBtn) undoBtn.hidden = !pendingLikes.has(resourceId);
 }
-
-const UNDO_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
 async function handleLike(resourceId) {
-  if (likedResources.has(resourceId)) return;
-  likedResources.add(resourceId);
-  saveLiked();
-  // Optimistic UI update
   const btn = document.querySelector(`.like-btn[data-id="${resourceId}"]`);
-  if (btn) {
-    const countEl = btn.querySelector('.like-count');
-    const iconEl = btn.querySelector('.like-icon');
-    if (countEl) countEl.textContent = (parseInt(countEl.textContent) || 0) + 1;
-    if (iconEl) iconEl.textContent = '♥';
-    btn.classList.add('liked');
-  }
-  // Write to Firestore immediately — count is safe even if tab closes
-  await incrementLike(resourceId);
-  // Show undo button, hide after 5 minutes
-  const timer = setTimeout(() => {
-    pendingLikes.delete(resourceId);
-    const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
-    if (undoBtn) undoBtn.hidden = true;
-  }, UNDO_WINDOW_MS);
-  pendingLikes.set(resourceId, timer);
-  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
-  if (undoBtn) undoBtn.hidden = false;
-}
-
-async function handleUndoLike(resourceId) {
-  const timer = pendingLikes.get(resourceId);
-  if (timer === undefined) return;
-  clearTimeout(timer);
-  pendingLikes.delete(resourceId);
-  likedResources.delete(resourceId);
-  saveLiked();
-  // Revert UI
-  const btn = document.querySelector(`.like-btn[data-id="${resourceId}"]`);
-  if (btn) {
-    const countEl = btn.querySelector('.like-count');
-    const iconEl = btn.querySelector('.like-icon');
+  const countEl = btn?.querySelector('.like-count');
+  const iconEl = btn?.querySelector('.like-icon');
+  if (likedResources.has(resourceId)) {
+    // Unlike
+    likedResources.delete(resourceId);
+    saveLiked();
     if (countEl) countEl.textContent = Math.max(0, (parseInt(countEl.textContent) || 1) - 1);
     if (iconEl) iconEl.textContent = '♡';
-    btn.classList.remove('liked');
+    btn?.classList.remove('liked');
+    await decrementLike(resourceId);
+  } else {
+    // Like
+    likedResources.add(resourceId);
+    saveLiked();
+    if (countEl) countEl.textContent = (parseInt(countEl.textContent) || 0) + 1;
+    if (iconEl) iconEl.textContent = '♥';
+    btn?.classList.add('liked');
+    await incrementLike(resourceId);
   }
-  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
-  if (undoBtn) undoBtn.hidden = true;
-  // Decrement in Firestore
-  await decrementLike(resourceId);
 }
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
@@ -460,6 +434,7 @@ async function loadComments(resourceId) {
           <div class="comment-header">
             <strong class="comment-author">${escapeHtml(c.name)}</strong>
             <span class="comment-time">${formatTimestamp(c.timestamp)}</span>
+            ${myCommentIds.has(c.id) ? `<button class="comment-delete-btn" data-resource-id="${escapeAttr(resourceId)}" data-comment-id="${escapeAttr(c.id)}">delete</button>` : ''}
           </div>
           <p class="comment-text">${escapeHtml(c.text)}</p>
         </div>
@@ -497,7 +472,9 @@ async function handlePostComment(resourceId) {
   submitBtn.disabled = true;
   submitBtn.textContent = 'Posting…';
   try {
-    await addComment(resourceId, name, text);
+    const commentId = await addComment(resourceId, name, text);
+    myCommentIds.add(commentId);
+    saveMyComments();
     textInput.value = '';
     await loadComments(resourceId);
   } catch (err) {
@@ -505,6 +482,17 @@ async function handlePostComment(resourceId) {
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Post';
+  }
+}
+
+async function handleDeleteComment(resourceId, commentId) {
+  try {
+    await deleteComment(resourceId, commentId);
+    myCommentIds.delete(commentId);
+    saveMyComments();
+    await loadComments(resourceId);
+  } catch (err) {
+    alert('Failed to delete comment. Please try again.');
   }
 }
 
@@ -551,9 +539,9 @@ function attachEventListeners() {
       return;
     }
 
-    const undoLikeBtn = e.target.closest('.undo-like-btn');
-    if (undoLikeBtn) {
-      await handleUndoLike(undoLikeBtn.dataset.id);
+    const deleteCommentBtn = e.target.closest('.comment-delete-btn');
+    if (deleteCommentBtn) {
+      await handleDeleteComment(deleteCommentBtn.dataset.resourceId, deleteCommentBtn.dataset.commentId);
       return;
     }
 
