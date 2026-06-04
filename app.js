@@ -76,6 +76,7 @@ async function fetchResources() {
       row._lessons = splitValues(row.Lesson);
       row._parts = splitValues(row.Part);
       row._projectTags = splitValues(row.ProjectTag);
+      row._contributors = splitValues(row.Contributor);
       return row;
     });
 }
@@ -125,7 +126,7 @@ function getFilteredResources() {
     if (filters.unitName && r.UnitName !== filters.unitName) return false;
     if (filters.lesson && !r._lessons.includes(filters.lesson)) return false;
     if (filters.part && !r._parts.includes(filters.part)) return false;
-    if (filters.contributor && r.Contributor !== filters.contributor) return false;
+    if (filters.contributor && !r._contributors.includes(filters.contributor)) return false;
     if (filters.projectTag && !r._projectTags.includes(filters.projectTag)) return false;
     return true;
   });
@@ -199,7 +200,7 @@ function buildDropdowns() {
   setDropdown('filter-unit', uniqueValues(byCourse, 'UnitName'), filters.unitName, 'All Units');
   setDropdown('filter-lesson', uniqueMultiValues(byUnit, '_lessons'), filters.lesson, 'All Lessons');
   setDropdown('filter-part', uniqueMultiValues(byLesson, '_parts'), filters.part, 'All Parts');
-  setDropdown('filter-contributor', uniqueValues(fullyFiltered, 'Contributor'), filters.contributor, 'All Contributors');
+  setDropdown('filter-contributor', uniqueMultiValues(fullyFiltered, '_contributors'), filters.contributor, 'All Contributors');
   setDropdown('filter-tag', uniqueMultiValues(fullyFiltered, '_projectTags'), filters.projectTag, 'All Tags');
 }
 
@@ -244,7 +245,7 @@ function renderCardHtml(r) {
   return `
     <article class="card" data-id="${r.id}">
       <div class="card-meta">
-        <span class="card-label">${escapeHtml(cardLabel(r))}${r.Contributor ? ` · <button class="link-btn contributor-filter" data-contributor="${escapeAttr(r.Contributor)}">by ${escapeHtml(r.Contributor)}</button>` : ''}</span>
+        <span class="card-label">${escapeHtml(cardLabel(r))}${r._contributors.length ? ` · by ${r._contributors.map(c => `<button class="link-btn contributor-filter" data-contributor="${escapeAttr(c)}">${escapeHtml(c)}</button>`).join(', ')}` : ''}</span>
         ${r._projectTags.map(tag => `<button class="tag tag-filter" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>`).join('')}
       </div>
       ${r.Nickname ? `<p class="card-nickname">
