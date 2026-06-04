@@ -61,7 +61,7 @@ function partSortKey(part) {
 const HEADERS = ['Timestamp', 'Email', 'Program', 'Course', 'UnitName', 'Lesson', 'Part', 'Nickname', 'Description', 'Coherence', 'Link', 'Contributor', 'ProjectTag'];
 
 async function fetchResources() {
-  const res = await fetch(CONFIG.sheetUrl);
+  const res = await fetch(CONFIG.sheetUrl, { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const text = await res.text();
   const lines = text.trim().split('\n');
