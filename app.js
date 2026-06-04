@@ -1,7 +1,7 @@
 // Storyline Workshop — Main application logic
 // Data fetching, parsing, filtering, and rendering.
 
-import { initFirebase, getLikes, incrementLike, getComments, addComment, isFirebaseAvailable } from './firebase.js';
+import { initFirebase, getLikes, incrementLike, decrementLike, getComments, addComment, isFirebaseAvailable } from './firebase.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -379,9 +379,7 @@ function updateLikeUI(resourceId, count) {
   if (!btn) return;
   const countEl = btn.querySelector('.like-count');
   const iconEl = btn.querySelector('.like-icon');
-  // Pending likes haven't been written to Firestore yet, so add them to display count
-  const displayCount = count + (pendingLikes.has(resourceId) ? 1 : 0);
-  if (countEl) countEl.textContent = displayCount;
+  if (countEl) countEl.textContent = count;
   if (iconEl) iconEl.textContent = likedResources.has(resourceId) ? '♥' : '♡';
   btn.classList.toggle('liked', likedResources.has(resourceId));
   const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
@@ -390,7 +388,7 @@ function updateLikeUI(resourceId, count) {
 
 const UNDO_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
-function handleLike(resourceId) {
+async function handleLike(resourceId) {
   if (likedResources.has(resourceId)) return;
   likedResources.add(resourceId);
   saveLiked();
@@ -403,21 +401,20 @@ function handleLike(resourceId) {
     if (iconEl) iconEl.textContent = '♥';
     btn.classList.add('liked');
   }
-  // Defer the Firestore write — allows undo within the window
-  const timer = setTimeout(() => commitLike(resourceId), UNDO_WINDOW_MS);
+  // Write to Firestore immediately — count is safe even if tab closes
+  await incrementLike(resourceId);
+  // Show undo button, hide after 5 minutes
+  const timer = setTimeout(() => {
+    pendingLikes.delete(resourceId);
+    const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
+    if (undoBtn) undoBtn.hidden = true;
+  }, UNDO_WINDOW_MS);
   pendingLikes.set(resourceId, timer);
   const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
   if (undoBtn) undoBtn.hidden = false;
 }
 
-async function commitLike(resourceId) {
-  pendingLikes.delete(resourceId);
-  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
-  if (undoBtn) undoBtn.hidden = true;
-  await incrementLike(resourceId);
-}
-
-function handleUndoLike(resourceId) {
+async function handleUndoLike(resourceId) {
   const timer = pendingLikes.get(resourceId);
   if (timer === undefined) return;
   clearTimeout(timer);
@@ -435,6 +432,8 @@ function handleUndoLike(resourceId) {
   }
   const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
   if (undoBtn) undoBtn.hidden = true;
+  // Decrement in Firestore
+  await decrementLike(resourceId);
 }
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
@@ -554,7 +553,7 @@ function attachEventListeners() {
 
     const undoLikeBtn = e.target.closest('.undo-like-btn');
     if (undoLikeBtn) {
-      handleUndoLike(undoLikeBtn.dataset.id);
+      await handleUndoLike(undoLikeBtn.dataset.id);
       return;
     }
 

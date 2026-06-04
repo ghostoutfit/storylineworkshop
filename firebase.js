@@ -65,6 +65,16 @@ export async function incrementLike(resourceId) {
   }
 }
 
+export async function decrementLike(resourceId) {
+  if (!firebaseAvailable) return;
+  try {
+    const ref = doc(db, 'resources', resourceId);
+    await updateDoc(ref, { likes: increment(-1) });
+  } catch (err) {
+    console.warn('Failed to decrement like for', resourceId, err);
+  }
+}
+
 // ─── Comments ─────────────────────────────────────────────────────────────────
 
 export async function getComments(resourceId) {

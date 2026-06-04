@@ -93,11 +93,11 @@ service cloud.firestore {
       allow create: true;
     }
 
-    // Anyone can increment likes on a resource document
-    // (only the likes field, no other fields, no decrements)
+    // Anyone can increment or decrement likes by 1 (decrement supports 5-min undo)
     match /resources/{resourceId} {
       allow update: if request.resource.data.keys().hasOnly(['likes'])
-                    && request.resource.data.likes == resource.data.likes + 1;
+                    && (request.resource.data.likes == resource.data.likes + 1
+                        || request.resource.data.likes == resource.data.likes - 1);
       allow create: if request.resource.data.keys().hasOnly(['likes'])
                     && request.resource.data.likes == 1;
     }
