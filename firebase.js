@@ -8,6 +8,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   increment,
   collection,
   addDoc,
@@ -97,11 +98,18 @@ export async function getComments(resourceId) {
 export async function addComment(resourceId, name, text) {
   if (!firebaseAvailable) throw new Error('Firebase not available');
   const commentsRef = collection(db, 'resources', resourceId, 'comments');
-  await addDoc(commentsRef, {
+  const ref = await addDoc(commentsRef, {
     name: name.trim(),
     text: text.trim(),
     timestamp: serverTimestamp()
   });
+  return ref.id;
+}
+
+export async function deleteComment(resourceId, commentId) {
+  if (!firebaseAvailable) throw new Error('Firebase not available');
+  const ref = doc(db, 'resources', resourceId, 'comments', commentId);
+  await deleteDoc(ref);
 }
 
 export function isFirebaseAvailable() {

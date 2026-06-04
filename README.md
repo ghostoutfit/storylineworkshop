@@ -88,9 +88,10 @@ service cloud.firestore {
       allow read: true;
     }
 
-    // Anyone can add a comment
+    // Anyone can add or delete a comment
     match /resources/{resourceId}/comments/{commentId} {
-      allow create: true;
+      allow create: if true;
+      allow delete: if true;
     }
 
     // Anyone can increment or decrement likes by 1 (decrement supports 5-min undo)
