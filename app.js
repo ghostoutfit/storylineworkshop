@@ -12,6 +12,7 @@ let singleResourceId = null;
 const likedResources = new Set(JSON.parse(localStorage.getItem('sw_liked') || '[]'));
 const likeCounts = {};   // resourceId → count, populated as likes load
 let currentBatchId = 0;  // incremented each render to discard stale like loads
+const pendingLikes = new Map(); // resourceId → timer — liked but not yet written to Firestore
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -258,9 +259,10 @@ function renderCardHtml(r) {
         ${r.Coherence ? renderCoherence(r.Coherence) : '<div></div>'}
         <div class="card-actions">
           <button class="like-btn${likedResources.has(r.id) ? ' liked' : ''}" data-id="${r.id}" aria-label="Like this resource">
-            <span class="like-icon">♡</span>
+            <span class="like-icon">${likedResources.has(r.id) ? '♥' : '♡'}</span>
             <span class="like-count">…</span>
           </button>
+          <button class="undo-like-btn" data-id="${r.id}"${pendingLikes.has(r.id) ? '' : ' hidden'}>undo</button>
           <button class="comments-toggle" data-id="${r.id}">
             Comments (<span class="comment-count-${r.id}">…</span>)
           </button>
@@ -377,13 +379,19 @@ function updateLikeUI(resourceId, count) {
   if (!btn) return;
   const countEl = btn.querySelector('.like-count');
   const iconEl = btn.querySelector('.like-icon');
-  if (countEl) countEl.textContent = count;
+  // Pending likes haven't been written to Firestore yet, so add them to display count
+  const displayCount = count + (pendingLikes.has(resourceId) ? 1 : 0);
+  if (countEl) countEl.textContent = displayCount;
   if (iconEl) iconEl.textContent = likedResources.has(resourceId) ? '♥' : '♡';
   btn.classList.toggle('liked', likedResources.has(resourceId));
+  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
+  if (undoBtn) undoBtn.hidden = !pendingLikes.has(resourceId);
 }
 
-async function handleLike(resourceId) {
-  if (likedResources.has(resourceId)) return; // already liked
+const UNDO_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+function handleLike(resourceId) {
+  if (likedResources.has(resourceId)) return;
   likedResources.add(resourceId);
   saveLiked();
   // Optimistic UI update
@@ -395,7 +403,38 @@ async function handleLike(resourceId) {
     if (iconEl) iconEl.textContent = '♥';
     btn.classList.add('liked');
   }
+  // Defer the Firestore write — allows undo within the window
+  const timer = setTimeout(() => commitLike(resourceId), UNDO_WINDOW_MS);
+  pendingLikes.set(resourceId, timer);
+  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
+  if (undoBtn) undoBtn.hidden = false;
+}
+
+async function commitLike(resourceId) {
+  pendingLikes.delete(resourceId);
+  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
+  if (undoBtn) undoBtn.hidden = true;
   await incrementLike(resourceId);
+}
+
+function handleUndoLike(resourceId) {
+  const timer = pendingLikes.get(resourceId);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  pendingLikes.delete(resourceId);
+  likedResources.delete(resourceId);
+  saveLiked();
+  // Revert UI
+  const btn = document.querySelector(`.like-btn[data-id="${resourceId}"]`);
+  if (btn) {
+    const countEl = btn.querySelector('.like-count');
+    const iconEl = btn.querySelector('.like-icon');
+    if (countEl) countEl.textContent = Math.max(0, (parseInt(countEl.textContent) || 1) - 1);
+    if (iconEl) iconEl.textContent = '♡';
+    btn.classList.remove('liked');
+  }
+  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
+  if (undoBtn) undoBtn.hidden = true;
 }
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
@@ -509,7 +548,13 @@ function attachEventListeners() {
   document.getElementById('results')?.addEventListener('click', async e => {
     const likeBtn = e.target.closest('.like-btn');
     if (likeBtn) {
-      await handleLike(likeBtn.dataset.id);
+      handleLike(likeBtn.dataset.id);
+      return;
+    }
+
+    const undoLikeBtn = e.target.closest('.undo-like-btn');
+    if (undoLikeBtn) {
+      handleUndoLike(undoLikeBtn.dataset.id);
       return;
     }
 
