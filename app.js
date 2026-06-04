@@ -1,14 +1,18 @@
 // Storyline Workshop — Main application logic
 // Data fetching, parsing, filtering, and rendering.
 
-import { initFirebase, getLikes, incrementLike, getComments, addComment, isFirebaseAvailable } from './firebase.js';
+import { initFirebase, getLikes, incrementLike, decrementLike, getComments, addComment, isFirebaseAvailable } from './firebase.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let allResources = [];   // full parsed dataset, never mutated
 let filters = {};        // current filter state
-let singleResourceId = null; // set when viewing a ?r= permalink
+let sortOrder = 'default';
+let singleResourceId = null;
 const likedResources = new Set(JSON.parse(localStorage.getItem('sw_liked') || '[]'));
+const likeCounts = {};   // resourceId → count, populated as likes load
+let currentBatchId = 0;  // incremented each render to discard stale like loads
+const pendingLikes = new Map(); // resourceId → timer — liked but not yet written to Firestore
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -73,6 +77,7 @@ async function fetchResources() {
       row._lessons = splitValues(row.Lesson);
       row._parts = splitValues(row.Part);
       row._projectTags = splitValues(row.ProjectTag);
+      row._contributors = splitValues(row.Contributor);
       return row;
     });
 }
@@ -122,13 +127,19 @@ function getFilteredResources() {
     if (filters.unitName && r.UnitName !== filters.unitName) return false;
     if (filters.lesson && !r._lessons.includes(filters.lesson)) return false;
     if (filters.part && !r._parts.includes(filters.part)) return false;
-    if (filters.contributor && r.Contributor !== filters.contributor) return false;
+    if (filters.contributor && !r._contributors.includes(filters.contributor)) return false;
     if (filters.projectTag && !r._projectTags.includes(filters.projectTag)) return false;
     return true;
   });
 }
 
 function getSortedResources(resources) {
+  if (sortOrder === 'newest') {
+    return [...resources].sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+  }
+  if (sortOrder === 'most-liked') {
+    return [...resources].sort((a, b) => (likeCounts[b.id] || 0) - (likeCounts[a.id] || 0));
+  }
   return [...resources].sort((a, b) => {
     const aPartKey = a._parts.length ? Math.min(...a._parts.map(partSortKey)) : 9999;
     const bPartKey = b._parts.length ? Math.min(...b._parts.map(partSortKey)) : 9999;
@@ -190,7 +201,7 @@ function buildDropdowns() {
   setDropdown('filter-unit', uniqueValues(byCourse, 'UnitName'), filters.unitName, 'All Units');
   setDropdown('filter-lesson', uniqueMultiValues(byUnit, '_lessons'), filters.lesson, 'All Lessons');
   setDropdown('filter-part', uniqueMultiValues(byLesson, '_parts'), filters.part, 'All Parts');
-  setDropdown('filter-contributor', uniqueValues(fullyFiltered, 'Contributor'), filters.contributor, 'All Contributors');
+  setDropdown('filter-contributor', uniqueMultiValues(fullyFiltered, '_contributors'), filters.contributor, 'All Contributors');
   setDropdown('filter-tag', uniqueMultiValues(fullyFiltered, '_projectTags'), filters.projectTag, 'All Tags');
 }
 
@@ -214,6 +225,13 @@ function setDropdown(id, options, selected, placeholder) {
 
 // ─── Card Rendering ───────────────────────────────────────────────────────────
 
+const COHERENCE_THRESHOLD = 160;
+
+function renderCoherence(text) {
+  const isLong = text.length > COHERENCE_THRESHOLD;
+  return `<div class="card-coherence${isLong ? ' coherence-collapsible' : ''}"><span class="coherence-label">Coherence:</span> <span class="coherence-body">${escapeHtml(text)}</span>${isLong ? ' <button class="coherence-expand" type="button">Show more</button>' : ''}</div>`;
+}
+
 function cardLabel(resource) {
   const parts = [];
   if (resource.UnitName) parts.push(resource.UnitName);
@@ -228,8 +246,7 @@ function renderCardHtml(r) {
   return `
     <article class="card" data-id="${r.id}">
       <div class="card-meta">
-        ${escapeHtml(cardLabel(r))}
-        ${r.Contributor ? ` · <button class="link-btn contributor-filter" data-contributor="${escapeAttr(r.Contributor)}">by ${escapeHtml(r.Contributor)}</button>` : ''}
+        <span class="card-label">${escapeHtml(cardLabel(r))}${r._contributors.length ? ` · by ${r._contributors.map(c => `<button class="link-btn contributor-filter" data-contributor="${escapeAttr(c)}">${escapeHtml(c)}</button>`).join(', ')}` : ''}</span>
         ${r._projectTags.map(tag => `<button class="tag tag-filter" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>`).join('')}
       </div>
       ${r.Nickname ? `<p class="card-nickname">
@@ -239,12 +256,13 @@ function renderCardHtml(r) {
       </p>` : ''}
       <p class="card-description">${escapeHtml(r.Description)}</p>
       <div class="card-bottom">
-        ${r.Coherence ? `<div class="card-coherence"><span class="coherence-label">Coherence:</span> ${escapeHtml(r.Coherence)}</div>` : '<div></div>'}
+        ${r.Coherence ? renderCoherence(r.Coherence) : '<div></div>'}
         <div class="card-actions">
           <button class="like-btn${likedResources.has(r.id) ? ' liked' : ''}" data-id="${r.id}" aria-label="Like this resource">
-            <span class="like-icon">♡</span>
+            <span class="like-icon">${likedResources.has(r.id) ? '♥' : '♡'}</span>
             <span class="like-count">…</span>
           </button>
+          <button class="undo-like-btn" data-id="${r.id}"${pendingLikes.has(r.id) ? '' : ' hidden'}>undo</button>
           <button class="comments-toggle" data-id="${r.id}">
             Comments (<span class="comment-count-${r.id}">…</span>)
           </button>
@@ -282,10 +300,11 @@ function renderCards(resources) {
     countEl.textContent = `${resources.length} resource${resources.length === 1 ? '' : 's'}`;
   }
 
+  const batchId = ++currentBatchId;
   container.innerHTML = resources.map(r => renderCardHtml(r)).join('');
 
   // Load likes asynchronously
-  resources.forEach(r => loadLikes(r.id));
+  resources.forEach(r => loadLikes(r.id, batchId));
 }
 
 function renderSingleResource(resource) {
@@ -323,7 +342,8 @@ function renderSingleResource(resource) {
     ${moreButtons.length ? `<div class="single-resource-more">${moreButtons.join('')}</div>` : ''}
   `;
 
-  loadLikes(resource.id);
+  const batchId = ++currentBatchId;
+  loadLikes(resource.id, batchId);
 }
 
 function exitSingleResource(newFilters) {
@@ -347,8 +367,10 @@ function escapeAttr(str) {
 
 // ─── Likes ────────────────────────────────────────────────────────────────────
 
-async function loadLikes(resourceId) {
+async function loadLikes(resourceId, batchId) {
   const count = await getLikes(resourceId);
+  if (batchId !== undefined && batchId !== currentBatchId) return;
+  likeCounts[resourceId] = count;
   updateLikeUI(resourceId, count);
 }
 
@@ -360,10 +382,14 @@ function updateLikeUI(resourceId, count) {
   if (countEl) countEl.textContent = count;
   if (iconEl) iconEl.textContent = likedResources.has(resourceId) ? '♥' : '♡';
   btn.classList.toggle('liked', likedResources.has(resourceId));
+  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
+  if (undoBtn) undoBtn.hidden = !pendingLikes.has(resourceId);
 }
 
+const UNDO_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
 async function handleLike(resourceId) {
-  if (likedResources.has(resourceId)) return; // already liked
+  if (likedResources.has(resourceId)) return;
   likedResources.add(resourceId);
   saveLiked();
   // Optimistic UI update
@@ -375,7 +401,39 @@ async function handleLike(resourceId) {
     if (iconEl) iconEl.textContent = '♥';
     btn.classList.add('liked');
   }
+  // Write to Firestore immediately — count is safe even if tab closes
   await incrementLike(resourceId);
+  // Show undo button, hide after 5 minutes
+  const timer = setTimeout(() => {
+    pendingLikes.delete(resourceId);
+    const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
+    if (undoBtn) undoBtn.hidden = true;
+  }, UNDO_WINDOW_MS);
+  pendingLikes.set(resourceId, timer);
+  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
+  if (undoBtn) undoBtn.hidden = false;
+}
+
+async function handleUndoLike(resourceId) {
+  const timer = pendingLikes.get(resourceId);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  pendingLikes.delete(resourceId);
+  likedResources.delete(resourceId);
+  saveLiked();
+  // Revert UI
+  const btn = document.querySelector(`.like-btn[data-id="${resourceId}"]`);
+  if (btn) {
+    const countEl = btn.querySelector('.like-count');
+    const iconEl = btn.querySelector('.like-icon');
+    if (countEl) countEl.textContent = Math.max(0, (parseInt(countEl.textContent) || 1) - 1);
+    if (iconEl) iconEl.textContent = '♡';
+    btn.classList.remove('liked');
+  }
+  const undoBtn = document.querySelector(`.undo-like-btn[data-id="${resourceId}"]`);
+  if (undoBtn) undoBtn.hidden = true;
+  // Decrement in Firestore
+  await decrementLike(resourceId);
 }
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
@@ -466,6 +524,12 @@ function attachEventListeners() {
     });
   });
 
+  // Sort order
+  document.getElementById('sort-order')?.addEventListener('change', e => {
+    sortOrder = e.target.value;
+    update();
+  });
+
   // Clear filters
   document.getElementById('clear-filters')?.addEventListener('click', e => {
     e.preventDefault();
@@ -483,7 +547,13 @@ function attachEventListeners() {
   document.getElementById('results')?.addEventListener('click', async e => {
     const likeBtn = e.target.closest('.like-btn');
     if (likeBtn) {
-      await handleLike(likeBtn.dataset.id);
+      handleLike(likeBtn.dataset.id);
+      return;
+    }
+
+    const undoLikeBtn = e.target.closest('.undo-like-btn');
+    if (undoLikeBtn) {
+      await handleUndoLike(undoLikeBtn.dataset.id);
       return;
     }
 
@@ -524,6 +594,16 @@ function attachEventListeners() {
     const commentSubmit = e.target.closest('.comment-submit');
     if (commentSubmit) {
       await handlePostComment(commentSubmit.dataset.id);
+      return;
+    }
+
+    const coherenceExpandBtn = e.target.closest('.coherence-expand');
+    if (coherenceExpandBtn) {
+      const coherenceEl = coherenceExpandBtn.closest('.card-coherence');
+      if (coherenceEl) {
+        const expanded = coherenceEl.classList.toggle('expanded');
+        coherenceExpandBtn.textContent = expanded ? 'Show less' : 'Show more';
+      }
       return;
     }
 
