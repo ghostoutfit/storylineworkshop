@@ -7,7 +7,7 @@ import { initFirebase, getLikes, incrementLike, decrementLike, getComments, addC
 
 let allResources = [];   // full parsed dataset, never mutated
 let filters = {};        // current filter state
-let sortOrder = 'default';
+let sortOrder = 'newest';
 let singleResourceId = null;
 const likedResources = new Set(JSON.parse(localStorage.getItem('sw_liked') || '[]'));
 const likeCounts = {};   // resourceId → count, populated as likes load
