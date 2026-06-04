@@ -82,6 +82,9 @@ async function fetchResources() {
       row._parts = splitValues(row.Part);
       row._projectTags = splitValues(row.ProjectTag);
       row._contributors = splitValues(row.Contributor);
+      row._programs = splitValues(row.Program);
+      row._courses = splitValues(row.Course);
+      row._unitNames = splitValues(row.UnitName);
       return row;
     });
 }
@@ -126,9 +129,9 @@ function applyUrlHash(params) {
 
 function getFilteredResources() {
   return allResources.filter(r => {
-    if (filters.program && r.Program !== filters.program) return false;
-    if (filters.course && r.Course !== filters.course) return false;
-    if (filters.unitName && r.UnitName !== filters.unitName) return false;
+    if (filters.program && !r._programs.includes(filters.program)) return false;
+    if (filters.course && !r._courses.includes(filters.course)) return false;
+    if (filters.unitName && !r._unitNames.includes(filters.unitName)) return false;
     if (filters.lesson && !r._lessons.includes(filters.lesson)) return false;
     if (filters.part && !r._parts.includes(filters.part)) return false;
     if (filters.contributor && !r._contributors.includes(filters.contributor)) return false;
@@ -182,13 +185,13 @@ function buildDropdowns() {
   // matching all *upstream* filters (filters above it in the cascade).
 
   const byProgram = allResources.filter(r =>
-    !filters.program || r.Program === filters.program
+    !filters.program || r._programs.includes(filters.program)
   );
   const byCourse = byProgram.filter(r =>
-    !filters.course || r.Course === filters.course
+    !filters.course || r._courses.includes(filters.course)
   );
   const byUnit = byCourse.filter(r =>
-    !filters.unitName || r.UnitName === filters.unitName
+    !filters.unitName || r._unitNames.includes(filters.unitName)
   );
   const byLesson = byUnit.filter(r =>
     !filters.lesson || r._lessons.includes(filters.lesson)
@@ -200,9 +203,9 @@ function buildDropdowns() {
   // Contributor and ProjectTag filter from fully-filtered set (not cascading positionally)
   const fullyFiltered = getFilteredResources();
 
-  setDropdown('filter-program', uniqueValues(allResources, 'Program'), filters.program, 'All Programs');
-  setDropdown('filter-course', uniqueValues(byProgram, 'Course'), filters.course, 'All Courses');
-  setDropdown('filter-unit', uniqueValues(byCourse, 'UnitName'), filters.unitName, 'All Units');
+  setDropdown('filter-program', uniqueMultiValues(allResources, '_programs'), filters.program, 'All Programs');
+  setDropdown('filter-course', uniqueMultiValues(byProgram, '_courses'), filters.course, 'All Courses');
+  setDropdown('filter-unit', uniqueMultiValues(byCourse, '_unitNames'), filters.unitName, 'All Units');
   setDropdown('filter-lesson', uniqueMultiValues(byUnit, '_lessons'), filters.lesson, 'All Lessons');
   setDropdown('filter-part', uniqueMultiValues(byLesson, '_parts'), filters.part, 'All Parts');
   setDropdown('filter-contributor', uniqueMultiValues(fullyFiltered, '_contributors'), filters.contributor, 'All Contributors');
