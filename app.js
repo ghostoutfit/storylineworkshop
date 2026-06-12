@@ -454,6 +454,20 @@ function updateCommentCount(resourceId, count) {
   });
 }
 
+function showCommentError(section, msg) {
+  let el = section.querySelector('.comment-error');
+  if (!el) {
+    el = document.createElement('p');
+    el.className = 'comment-error error-msg';
+    section.querySelector('.comment-form').prepend(el);
+  }
+  el.textContent = msg;
+}
+
+function clearCommentError(section) {
+  section.querySelector('.comment-error')?.remove();
+}
+
 async function handlePostComment(resourceId) {
   const section = document.getElementById(`comments-${resourceId}`);
   if (!section) return;
@@ -465,13 +479,14 @@ async function handlePostComment(resourceId) {
   const text = textInput.value.trim();
 
   if (!name || !text) {
-    alert('Please enter your name and a comment.');
+    showCommentError(section, 'Please enter your name and a comment.');
     return;
   }
 
   // Remember name across sessions
   localStorage.setItem('sw_commenter_name', name);
 
+  clearCommentError(section);
   submitBtn.disabled = true;
   submitBtn.textContent = 'Posting…';
   try {
@@ -481,7 +496,10 @@ async function handlePostComment(resourceId) {
     textInput.value = '';
     await loadComments(resourceId);
   } catch (err) {
-    alert('Failed to post comment. Please try again.');
+    const msg = err.message === 'timeout'
+      ? 'Timed out — check your connection and try again.'
+      : 'Failed to post comment. Please try again.';
+    showCommentError(section, msg);
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Post';

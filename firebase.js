@@ -83,7 +83,8 @@ export async function getComments(resourceId) {
   try {
     const commentsRef = collection(db, 'resources', resourceId, 'comments');
     const q = query(commentsRef, orderBy('timestamp', 'asc'));
-    const snapshot = await getDocs(q);
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
+    const snapshot = await Promise.race([getDocs(q), timeout]);
     return snapshot.docs.map(d => ({
       id: d.id,
       ...d.data(),
@@ -91,18 +92,22 @@ export async function getComments(resourceId) {
     }));
   } catch (err) {
     console.warn('Failed to get comments for', resourceId, err);
-    return [];
+    throw err;
   }
 }
 
 export async function addComment(resourceId, name, text) {
   if (!firebaseAvailable) throw new Error('Firebase not available');
   const commentsRef = collection(db, 'resources', resourceId, 'comments');
-  const ref = await addDoc(commentsRef, {
-    name: name.trim(),
-    text: text.trim(),
-    timestamp: serverTimestamp()
-  });
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000));
+  const ref = await Promise.race([
+    addDoc(commentsRef, {
+      name: name.trim(),
+      text: text.trim(),
+      timestamp: serverTimestamp()
+    }),
+    timeout
+  ]);
   return ref.id;
 }
 
