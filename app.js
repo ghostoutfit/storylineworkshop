@@ -1,7 +1,7 @@
 // Storyline Workshop — Main application logic
 // Data fetching, parsing, filtering, and rendering.
 
-import { initFirebase, getLikes, incrementLike, decrementLike, getComments, addComment, deleteComment, isFirebaseAvailable } from './firebase.js';
+import { initFirebase, getLikes, incrementLike, decrementLike, getCommentCount, getComments, addComment, deleteComment, isFirebaseAvailable } from './firebase.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -282,7 +282,10 @@ function renderCardHtml(r) {
         <div class="comment-form">
           <input class="comment-name" type="text" placeholder="Your name" maxlength="80" />
           <textarea class="comment-text" placeholder="Add a comment…" rows="2" maxlength="2000"></textarea>
-          <button class="comment-submit" data-id="${r.id}">Post</button>
+          <div class="comment-form-row">
+            <button class="comment-submit" data-id="${r.id}">Post</button>
+            <span class="comment-status" aria-live="polite"></span>
+          </div>
         </div>
       </div>
     </article>`;
@@ -309,8 +312,11 @@ function renderCards(resources) {
   const batchId = ++currentBatchId;
   container.innerHTML = resources.map(r => renderCardHtml(r)).join('');
 
-  // Load likes asynchronously
-  resources.forEach(r => loadLikes(r.id, batchId));
+  // Load likes and comment counts asynchronously
+  resources.forEach(r => {
+    loadLikes(r.id, batchId);
+    loadCommentCount(r.id, batchId);
+  });
 }
 
 function renderSingleResource(resource) {
@@ -350,6 +356,7 @@ function renderSingleResource(resource) {
 
   const batchId = ++currentBatchId;
   loadLikes(resource.id, batchId);
+  loadCommentCount(resource.id, batchId);
 }
 
 function exitSingleResource(newFilters) {
@@ -413,6 +420,12 @@ async function handleLike(resourceId) {
   }
 }
 
+async function loadCommentCount(resourceId, batchId) {
+  const count = await getCommentCount(resourceId);
+  if (batchId !== undefined && batchId !== currentBatchId) return;
+  updateCommentCount(resourceId, count);
+}
+
 // ─── Comments ─────────────────────────────────────────────────────────────────
 
 async function loadComments(resourceId) {
@@ -460,12 +473,14 @@ async function handlePostComment(resourceId) {
   const nameInput = section.querySelector('.comment-name');
   const textInput = section.querySelector('.comment-text');
   const submitBtn = section.querySelector('.comment-submit');
+  const statusEl = section.querySelector('.comment-status');
 
   const name = nameInput.value.trim();
   const text = textInput.value.trim();
 
   if (!name || !text) {
-    alert('Please enter your name and a comment.');
+    statusEl.textContent = 'Please enter your name and a comment.';
+    statusEl.className = 'comment-status comment-status--error';
     return;
   }
 
@@ -474,6 +489,8 @@ async function handlePostComment(resourceId) {
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Posting…';
+  statusEl.textContent = '';
+  statusEl.className = 'comment-status';
   try {
     const commentId = await addComment(resourceId, name, text);
     myCommentIds.add(commentId);
@@ -481,7 +498,8 @@ async function handlePostComment(resourceId) {
     textInput.value = '';
     await loadComments(resourceId);
   } catch (err) {
-    alert('Failed to post comment. Please try again.');
+    statusEl.textContent = 'Failed to post comment. Please try again.';
+    statusEl.className = 'comment-status comment-status--error';
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Post';

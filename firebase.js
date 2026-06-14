@@ -15,6 +15,7 @@ import {
   query,
   orderBy,
   getDocs,
+  getCountFromServer,
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -77,6 +78,18 @@ export async function decrementLike(resourceId) {
 }
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
+
+export async function getCommentCount(resourceId) {
+  if (!firebaseAvailable) return 0;
+  try {
+    const commentsRef = collection(db, 'resources', resourceId, 'comments');
+    const snap = await getCountFromServer(commentsRef);
+    return snap.data().count;
+  } catch (err) {
+    console.warn('Failed to get comment count for', resourceId, err);
+    return 0;
+  }
+}
 
 export async function getComments(resourceId) {
   if (!firebaseAvailable) return [];

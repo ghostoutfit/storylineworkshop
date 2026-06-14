@@ -603,6 +603,21 @@ button {
   cursor: not-allowed;
 }
 
+.comment-form-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.comment-status {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.comment-status--error {
+  color: #b00;
+}
+
 /* ─── States ─────────────────────────────────────────────────────────────────── */
 
 .loading-msg,
