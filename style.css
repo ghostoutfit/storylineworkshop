@@ -102,9 +102,22 @@ button {
   margin-top: 0.2rem;
 }
 
+.header-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
 .header-submit {
   font-size: 0.875rem;
   color: var(--accent);
+  white-space: nowrap;
+}
+
+.header-db-link {
+  font-size: 0.8rem;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
